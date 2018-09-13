@@ -1,0 +1,85 @@
+$$
+$$ listprocs.wbs
+$$
+$$ Walk the current list of processes
+$$
+$$ OSR Open Systems Resources, inc.
+$$
+$$ http://www.osr.com
+$$ http://www.osronline.com
+$$
+$$
+$$ To run:
+$$
+$$ $$><listprocs.wbs
+$$
+
+.echo ************************************************
+.echo * This command brought to you by osronline.com *
+.echo ************************************************
+
+
+$$ Global aliases
+
+$$ Note that we use ${/v:} around all of our alias names. This shuts
+$$ alias expansion OFF for these names. Without these, multiple invocations
+$$ of the script can cause issues
+
+$$ Cast the active process list head as a LIST_ENTRY pointer
+
+aS ${/v:PsActiveProcessHead} "@@c++((nt!_LIST_ENTRY *)@@masm(nt!PsActiveProcessHead))"
+
+$$ This is the offset of the list entry that PsActiveProcessHead points to
+
+aS ${/v:ProcessLinksOffset} "@@c++(#FIELD_OFFSET(nt!_EPROCESS, ActiveProcessLinks))"
+
+$$ And the offset to the 16 character ANSI name
+
+aS ${/v:ImageNameOffset}    "@@c++(#FIELD_OFFSET(nt!_EPROCESS, ImageFileName))"
+
+$$ Locals
+
+aS ${/v:listEntry} "@$t0"
+aS ${/v:currProc}  "@$t1"
+
+$$ Force the script to evaluate the above aliases with a .block
+.block 
+{
+
+    $$ Get the Flink value of the head. Note that r? is required
+    $$ to use the C++ syntax in the r statement. Also, the type is
+    $$ assigned to the resulting register
+
+    r? ${listEntry} = @@c++(${PsActiveProcessHead}->Flink)
+    
+    $$ And loop while we have entries...
+    
+    .while (${listEntry} != ${PsActiveProcessHead}) 
+    {
+
+        $$ Get the base of the struct from the list pointer. 
+        $$ Note that #CONTAINING_RECORD would also work
+
+        r ${currProc} = ${listEntry} - ${ProcessLinksOffset}
+        
+        $$ Dump the ASCII 16 character name in the process
+
+        da ${currProc} + ${ImageNameOffset}
+
+        $$ Move on to the next entry. Our r? command makes sure
+        $$ that ${listEntry} is typed appropriately
+
+        r? ${listEntry} = @@c++(${listEntry}->Flink)
+
+     }
+}
+
+$$ /v: suppresses the alias expansion
+
+ad ${/v:currProc}
+ad ${/v:listEntry}
+ad ${/v:ProcessLinksOffset}
+ad ${/v:ImageNameOffset}
+ad ${/v:PsActiveProcessHead}
+
+        

@@ -1,0 +1,180 @@
+$$
+$$ pscallbacks.wbs
+$$
+$$ Walk the current list of thread and process notification callbacks
+$$
+$$ OSR Open Systems Resources, inc.
+$$
+$$ http://www.osr.com
+$$ http://www.osronline.com
+$$
+$$
+$$ To run:
+$$
+$$ $$><pscallbacks.wbs
+$$
+
+.echo ************************************************
+.echo * This command brought to you by osronline.com *
+.echo ************************************************
+
+$$ Start off by creating some aliases that will make this script more readable
+
+$$ Globals
+
+$$ Note that we use ${/v:} around all of our alias names. This shuts
+$$ alias expansion OFF for these names. Without these, multiple invocations
+$$ of the script can cause issues
+
+aS ${/v:BuildNumber} "low(dwo(nt!NtBuildNumber))";
+aS ${/v:ImageLoadCount} "dwo(nt!PspLoadImageNotifyRoutineCount)";
+aS ${/v:ImageLoadBase} "nt!PspLoadImageNotifyRoutine";
+
+
+$$
+$$ Include the Ex callbacks where available
+$$
+
+.block
+{
+    .if (${BuildNumber} <= 0n3790)
+    {
+        aS ${/v:ProcessNotifyCount} "dwo(nt!PspCreateProcessNotifyRoutineCount)";
+    }
+    .else
+    {
+        aS ${/v:ProcessNotifyCount} "dwo(nt!PspCreateProcessNotifyRoutineCount) + dwo(nt!PspCreateProcessNotifyRoutineExCount)";
+    }
+}
+
+aS ${/v:ProcessNotifyBase} "nt!PspCreateProcessNotifyRoutine";
+
+
+$$ Our options
+
+aS ${/v:DISPLAY_IMAGE_NOTIFY} "1";
+aS ${/v:DISPLAY_PROCESS_NOTIFY} "2";
+aS ${/v:options} "@$t0";
+
+
+$$ variables
+aS ${/v:i} "@$t1";
+aS ${/v:imageEntry} "@$t2";
+aS ${/v:processEntry} "@$t3";
+aS ${/v:functionPtr} "@$t4";
+
+$$ The .block is necessary to make sure that all of the above aliases are evaluated
+.block
+{
+    r ${options} = 0;
+    $$ Check the parameters. Valid values are:
+    $$
+    $$ i - Image load callbacks only
+    $$ p - Process notification callbacks only
+    $$ * - All callbacks
+    $$
+    .if (${/d:$arg1} == 1)
+    {
+        .if ('${$arg1}' == 'i')
+        {
+            r ${options} = ${DISPLAY_IMAGE_NOTIFY};
+        }
+        .elsif ('${$arg1}' == 'p')
+        {
+            r ${options} = ${DISPLAY_PROCESS_NOTIFY};
+        }
+        .elsif ('${$arg1}' == '*')
+        {
+            r ${options} = ${DISPLAY_IMAGE_NOTIFY} | ${DISPLAY_PROCESS_NOTIFY};
+        }
+        .else
+        {
+            .echo Error! Valid parameters are i,p, and *.
+        }
+    }
+    .else
+    {
+        $$ Default to showing everything.
+        r ${options} = ${DISPLAY_IMAGE_NOTIFY} | ${DISPLAY_PROCESS_NOTIFY};
+    }
+    .if ((${options} & ${DISPLAY_IMAGE_NOTIFY}) != 0)
+    {
+        .echo ************************************;
+        .echo * Printing image load callbacks... *;
+        .echo ************************************;
+
+        $$ Walk the image load notify routines
+        r ${imageEntry} = ${ImageLoadBase};
+
+        .for (r ${i} = 0; ${i} < ${ImageLoadCount}; r ${i} = ${i} + 1)
+        {
+            $$ This points to a function, though the bottom bits are control info.
+            $$ So, mask those off
+            r ${functionPtr} = (poi(${imageEntry}) & -8);
+
+            $$ Unassemble the first instruction
+            .if (@$ptrsize == 4)
+            {
+                $$ 32bit systems seem to have more control info ahead of the function
+                $$ pointer, so skip that.
+                u poi(${functionPtr} + 4) l1;
+            }
+            .else
+            {
+                u poi(${functionPtr}) l1;
+            }
+
+            $$ Walk to the next entry in the array
+            r ${imageEntry} = ${imageEntry} + @$ptrsize;
+            .echo --------------------------------------------;
+        }
+    }
+    .if ((${options} & ${DISPLAY_PROCESS_NOTIFY}) != 0)
+    {
+        .echo **********************************************;
+        .echo * Printing process notification callbacks... *;
+        .echo **********************************************;
+
+        $$ Walk the process notification routines
+        r ${processEntry} = ${ProcessNotifyBase};
+
+        .for (r ${i} = 0; ${i} < ${ProcessNotifyCount}; r ${i} = ${i} + 1)
+        {
+            $$ This points to a function, though the bottom bits are control info.
+            $$ So, mask those off
+            r ${functionPtr} = (poi(${processEntry}) & -8);
+
+            $$ Unassemble the first instruction
+            .if (@$ptrsize == 4)
+            {
+                $$ 32bit systems seem to have more control info ahead of the function
+                $$ pointer, so skip that.
+                u poi(${functionPtr} + 4) l1;
+            }
+            .else
+            {
+                u poi(${functionPtr}) l1;
+            }
+            $$ Walk to the next entry in the array
+            r ${processEntry} = ${processEntry} + @$ptrsize;
+            .echo --------------------------------------------;
+        }
+    }
+}
+	
+
+$$ Clean up our aliases
+
+ad ${/v:DISPLAY_IMAGE_NOTIFY};
+ad ${/v:DISPLAY_PROCESS_NOTIFY};
+ad ${/v:options};
+ad ${/v:i};
+ad ${/v:imageEntry};
+ad ${/v:processEntry};
+ad ${/v:functionPtr};
+ad ${/v:BuildNumber};
+ad ${/v:ImageLoadCount};
+ad ${/v:ImageLoadBase};
+ad ${/v:ProcessNotifyCount};
+ad ${/v:ProcessNotifyBase};
+
