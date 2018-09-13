@@ -1,7 +1,7 @@
 $$
 $$ pscallbacks.wbs
 $$
-$$ Walk the current list of thread and process notification callbacks
+$$ Walk the current list of image and process notification callbacks
 $$
 $$ OSR Open Systems Resources, inc.
 $$
