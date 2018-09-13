@@ -1,0 +1,145 @@
+$$ cmcallbacks.wbs
+$$
+$$ Version 2
+$$
+$$ This script walks the list of registered Configuration Manager (registry)
+$$ callbacks
+$$
+$$ Currently tested platforms: 
+$$
+$$  Win8.1 x64
+$$
+$$  Win7 x64
+$$
+$$  WinXP x86
+$$
+$$ OSR Open Systems Resources, inc.
+$$
+$$ http://www.osr.com
+$$ http://www.osronline.com
+$$
+$$
+$$ To run:
+$$
+$$ $$><cmcallbacks.wbs
+
+.echo ************************************************
+.echo * This command brought to you by osronline.com *
+.echo ************************************************
+.echo
+
+$$ Start off by creating some aliases that will make this script more readable
+
+$$ Globals
+
+aS ${/v:BuildNumber} "low(dwo(nt!NtBuildNumber))";
+
+aS ${/v:CmCallBackCount} "dwo(nt!CmpCallBackCount)";
+
+$$ Pre-Vista uses an array of callbacks
+aS ${/v:CmCallBackBase}  "nt!CmpCallBackVector";
+
+
+$$ Vista and later has a list of callbacks
+aS ${/v:CmCallBackListHead} "@@c++((nt!_LIST_ENTRY *)@@masm(nt!CallbackListHead))";
+
+$$ Can't seem to find a type for the entries in the list, so offsets it is
+aS ${/v:CallBackOffsetx86} "0x1C";
+aS ${/v:CallBackOffsetx64} "0x28";
+
+
+$$ variables
+
+aS ${/v:listEntry} "@$t0";
+aS ${/v:i} "@$t1";
+aS ${/v:cmEntry} "@$t2";
+aS ${/v:functionPtr} "@$t3";
+
+$$ The .block is necessary to make sure that all of the above aliases are evaluated
+.block 
+{
+    .echo **********************************;
+    .echo * Printing registry callbacks... *;
+    .echo **********************************;
+    .echo
+    .if (${BuildNumber} <= 0n3790)
+    {
+        $$ Pre-Vista callbacks. These work like the Ps callbacks (see pscallbacks.wbs)
+
+        $$ Walk the CM notification routines
+        r ${cmEntry} = ${CmCallBackBase};
+
+        .for (r ${i} = 0; ${i} < ${CmCallBackCount}; r ${i} = ${i} + 1) 
+        {
+
+            $$ This points to a function, though the bottom bits are control info.
+            $$ So, mask those off
+            r ${functionPtr} = (poi(${cmEntry}) & -8);
+
+            $$ Unassemble the first instruction
+            .if (@$ptrsize == 4) 
+            {
+                $$ 32bit systems seem to have more control info ahead of the function
+                $$ pointer, so skip that.
+                u poi(${functionPtr} + 4) l1; 
+            }
+            .else
+            {
+                u poi(${functionPtr}) l1;
+            }
+
+            $$ Walk to the next entry in the array
+            r ${cmEntry} = ${cmEntry} + @$ptrsize;
+	    .echo --------------------------------------------;
+        }
+    }
+    .else
+    {
+        $$ Vista and later callbacks
+
+        $$ Get the Flink value of the head. Note that r? is required
+        $$ to use the C++ syntax in the r statement. Also, the type is
+        $$ assigned to the resulting register
+
+        r? ${listEntry} = @@c++(${CmCallBackListHead}->Flink)
+      
+        $$ And loop while we have entries...
+    
+        .while (${listEntry} != ${CmCallBackListHead}) 
+        {
+            $$ Dump the callback
+
+            .if (@$ptrsize == 4)
+            {
+                u poi(${listEntry} + ${CallBackOffsetx86}) l1
+            }
+            .else
+            {
+                u poi(${listEntry} + ${CallBackOffsetx64}) l1
+            }
+
+            $$ Move on to the next entry. Our r? command makes sure
+            $$ that ${listEntry} is typed appropriately
+
+            r? ${listEntry} = @@c++(${listEntry}->Flink);
+
+            .echo --------------------------------------------;
+  
+         }
+     }
+
+}
+
+
+$$ Clean up our aliases
+ad ${/v:listEntry};
+ad ${/v:BuildNumber};
+ad ${/v:CmCallBackCount};
+ad ${/v:CmCallBackListHead};
+ad ${/v:CallBackOffsetx86};
+ad ${/v:CallBackOffsetx64};
+ad ${/v:CmCallBackBase};
+ad ${/v:i};
+ad ${/v:cmEntry};
+ad ${/v:functionPtr};
+
